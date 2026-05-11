@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "scotland-archives": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "c:\\Users\\saman\\Projects V2\\Scotland-geneology-mcp",
+        "fastmcp",
+        "run",
+        "src/scotland_archives/server.py"
+      ]
+    }
+  }
+}
