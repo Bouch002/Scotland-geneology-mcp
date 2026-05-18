@@ -495,9 +495,9 @@ async def search_archives_hub(
     Records are free to view; contact the repository for originals.
     """
     max_results = min(max(1, max_results), 25)
+    search_terms = f"{query} Scotland" if scottish_only else query
     cql = f'({query}) AND "Scotland"' if scottish_only else query
-
-    search_url = f"{ARCHIVES_HUB_SEARCH}?query={urllib.parse.quote(query)}"
+    search_url = f"{ARCHIVES_HUB_SEARCH}?term={urllib.parse.quote(search_terms)}"
 
     sru_params = {
         "operation": "searchRetrieve",
@@ -508,23 +508,35 @@ async def search_archives_hub(
         "recordSchema": "dc",
     }
 
+    browser_instructions = (
+        f"1. Open the search_url link in your browser. "
+        f"2. If the search box is empty, copy and paste the search_terms value into it: {search_terms!r}. "
+        f"3. Press Enter or click Search. "
+        f"Results are free to view; contact the holding repository for access to original documents."
+    )
+
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.get(ARCHIVES_HUB_SRU, params=sru_params)
             if resp.status_code == 403:
                 return {
                     "search_url": search_url,
-                    "note": "Archives Hub SRU API is currently blocked by Cloudflare bot protection. Use search_url to open the search in your browser.",
+                    "search_terms": search_terms,
+                    "browser_instructions": browser_instructions,
+                    "note": "Archives Hub direct API access is blocked. Follow browser_instructions to run this search manually.",
                     "records": [],
                     "total_results": 0,
                 }
             resp.raise_for_status()
         result = _parse_sru_xml(resp.text)
         result["search_url"] = search_url
+        result["search_terms"] = search_terms
         return result
     except httpx.HTTPError as exc:
         return {
             "search_url": search_url,
+            "search_terms": search_terms,
+            "browser_instructions": browser_instructions,
             "error": f"Archives Hub request failed: {exc}",
             "records": [],
             "total_results": 0,

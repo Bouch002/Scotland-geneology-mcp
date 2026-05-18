@@ -189,8 +189,8 @@ async def test_search_archives_hub_success():
     assert result["total_results"] == 1
     assert len(result["records"]) == 1
     assert result["records"][0]["title"] == "Papers of the Mackenzie Family of Seaforth"
-    assert "search_url" in result
-    assert "archiveshub.jisc.ac.uk" in result["search_url"]
+    assert "archiveshub.jisc.ac.uk/search/" in result["search_url"]
+    assert "Mackenzie Seaforth" in result["search_terms"]
 
 
 @pytest.mark.asyncio
@@ -198,8 +198,9 @@ async def test_search_archives_hub_success():
 async def test_search_archives_hub_cloudflare_blocked():
     respx.get(ARCHIVES_HUB_SRU).mock(return_value=httpx.Response(403, text="Forbidden"))
     result = await search_archives_hub(query="anything")
-    assert "search_url" in result
-    assert "archiveshub.jisc.ac.uk" in result["search_url"]
+    assert "archiveshub.jisc.ac.uk/search/" in result["search_url"]
+    assert "browser_instructions" in result
+    assert "anything" in result["search_terms"]
     assert result["records"] == []
 
 
@@ -209,7 +210,8 @@ async def test_search_archives_hub_network_error():
     respx.get(ARCHIVES_HUB_SRU).mock(side_effect=httpx.ConnectError("Connection refused"))
     result = await search_archives_hub(query="anything")
     assert "error" in result
-    assert "search_url" in result
+    assert "archiveshub.jisc.ac.uk/search/" in result["search_url"]
+    assert "browser_instructions" in result
     assert result["records"] == []
 
 
