@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import math
+import urllib.parse
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
 
+import truststore
 import httpx
 from fastmcp import FastMCP
+
+truststore.inject_into_ssl()
 
 mcp = FastMCP(
     "Scotland Archives",
@@ -30,7 +34,7 @@ RECORD_TYPES: dict[str, dict] = {
     "opr_births": {
         "label": "Old Parish Registers — Births & Baptisms",
         "coverage": "c.1553–1854",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=opr_births",
+        "search_path": "/search-records/church-registers/church-births-baptisms",
         "tip": (
             "Spelling of surnames varied hugely — try MacDonald, McDonald, and M'Donald. "
             "Many parishes only start in the 1700s or later; check the parish catalogue for exact start dates."
@@ -39,7 +43,7 @@ RECORD_TYPES: dict[str, dict] = {
     "opr_marriages": {
         "label": "Old Parish Registers — Marriages & Banns",
         "coverage": "c.1553–1854",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=opr_marriages",
+        "search_path": "/search-records/church-registers/church-banns-marriages",
         "tip": (
             "Search on both bride and groom surnames. "
             "Banns (proclamations) were recorded weeks before the marriage date."
@@ -48,7 +52,7 @@ RECORD_TYPES: dict[str, dict] = {
     "opr_deaths": {
         "label": "Old Parish Registers — Deaths & Burials",
         "coverage": "c.1553–1854",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=opr_deaths",
+        "search_path": "/search-records/church-registers/church-deaths-burials",
         "tip": (
             "OPR death entries are sparse — many parishes recorded very few burials. "
             "If missing, check the statutory registers (post-1855) or Kirk Session minutes."
@@ -57,7 +61,7 @@ RECORD_TYPES: dict[str, dict] = {
     "stat_births": {
         "label": "Statutory Registers — Births",
         "coverage": "1855–present (recent years restricted)",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=stat_births",
+        "search_path": "/search-records/statutory-records/stat_births",
         "tip": (
             "From 1855 these include full address, father's occupation, and informant name. "
             "Access to recent births (within ~100 years) is restricted."
@@ -66,13 +70,13 @@ RECORD_TYPES: dict[str, dict] = {
     "stat_marriages": {
         "label": "Statutory Registers — Marriages",
         "coverage": "1855–present",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=stat_marriages",
+        "search_path": "/search-records/statutory-records/stat_marriages",
         "tip": "Both spouses' parents are named from 1855 — very useful for tracing two generations at once.",
     },
     "stat_deaths": {
         "label": "Statutory Registers — Deaths",
         "coverage": "1855–present (recent years restricted)",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=stat_deaths",
+        "search_path": "/search-records/statutory-records/stat_deaths",
         "tip": (
             "Cause of death and usual residence recorded. "
             "Parents named even for elderly decedents — often the only record of parents for those born pre-1855."
@@ -81,7 +85,7 @@ RECORD_TYPES: dict[str, dict] = {
     "census": {
         "label": "Census Records",
         "coverage": "1841, 1851, 1861, 1871, 1881, 1891, 1901, 1911, 1921",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=census",
+        "search_path": "/search-records/census-returns/census",
         "tip": (
             "Search all census years — family members may appear in different households. "
             "1841 only shows approximate ages (rounded down to nearest 5 for adults)."
@@ -90,7 +94,7 @@ RECORD_TYPES: dict[str, dict] = {
     "wills": {
         "label": "Wills & Testaments",
         "coverage": "1513–1925",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=wills",
+        "search_path": "/search-records/legal-records/wills",
         "tip": (
             "Scottish testaments were confirmed in Commissary Courts (pre-1823) then Sheriff Courts. "
             "They name executors and beneficiaries — useful for mapping family networks."
@@ -99,7 +103,7 @@ RECORD_TYPES: dict[str, dict] = {
     "valuation_rolls": {
         "label": "Valuation Rolls",
         "coverage": "1855–1989",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=valuation_rolls",
+        "search_path": "/search-records/tax-records/vr",
         "tip": (
             "Lists all property occupiers annually — excellent for tracking families between census years. "
             "Shows tenant name, proprietor name, and annual property value."
@@ -108,7 +112,7 @@ RECORD_TYPES: dict[str, dict] = {
     "catholic_registers": {
         "label": "Catholic Parish Registers",
         "coverage": "c.1703–1993",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=catholic_registers",
+        "search_path": "/search-records/church-registers/church-births-baptisms",
         "tip": (
             "Coverage is uneven; many Highland and Hebridean parishes have significant gaps. "
             "Useful for Irish immigrant communities in industrial Lowlands from the 1840s onward."
@@ -117,7 +121,7 @@ RECORD_TYPES: dict[str, dict] = {
     "church_records": {
         "label": "Church Records (non-OPR denominations)",
         "coverage": "Varies, c.1700s–1900s",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=church_records",
+        "search_path": "/search-records/church-registers/church-other",
         "tip": (
             "Includes Free Church (post-1843 Disruption), United Presbyterian, Reformed Presbyterian, and Episcopalian registers. "
             "Essential for areas with strong Dissenting traditions."
@@ -126,19 +130,19 @@ RECORD_TYPES: dict[str, dict] = {
     "military": {
         "label": "Military Records & Soldiers' Wills",
         "coverage": "Various",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=soldiers_wills",
+        "search_path": "/search-records/legal-records/soldiers_wills",
         "tip": "Soldiers' wills are brief field documents; cross-reference with service records at The National Archives (Kew) for full service history.",
     },
     "prison_records": {
         "label": "Prison Registers",
         "coverage": "1657–1939",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=prison_registers",
+        "search_path": "/search-records/prison-registers/prison_records",
         "tip": "Often note place of birth, occupation, and physical description — useful for identifying individuals with common names.",
     },
     "poor_relief": {
         "label": "Poor Relief & Migration Records",
         "coverage": "c.1700s–1900s",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=poor_relief",
+        "search_path": "/search-records/poor_relief/hie",
         "tip": (
             "Kirk Session poor relief records often predate statutory records by decades. "
             "Removal orders can reveal a person's place of origin when they moved parish."
@@ -147,13 +151,13 @@ RECORD_TYPES: dict[str, dict] = {
     "coats_of_arms": {
         "label": "Coats of Arms",
         "coverage": "1672–present",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=coats_of_arms",
+        "search_path": "/search-records/legal-records/coa",
         "tip": "Maintained by Lord Lyon King of Arms. Legally heritable in Scotland; grants name the recipient's lineage.",
     },
     "divorces": {
         "label": "Divorce Records",
         "coverage": "1984–present (Sheriff Court); Court of Session pre-1984",
-        "search_path": "/record-results?search_type=PEOPLE&record_type[]=divorces",
+        "search_path": "/search-records/statutory-records/stat_divorces",
         "tip": "Pre-1984 divorce records are held at the Court of Session; contact NRS for access.",
     },
 }
@@ -224,7 +228,7 @@ def search_scotlandspeople(
         params.append(f"parish={parish}")
 
     base = f"{SCOTLANDSPEOPLE_BASE}{info['search_path']}"
-    url = f"{base}&{'&'.join(params)}" if params else base
+    url = f"{base}?{'&'.join(params)}" if params else base
 
     return {
         "url": url,
@@ -370,8 +374,10 @@ def get_nls_map_url(
       Scotland spans approx 54.5–60.9°N, -8.0– -0.7°E.
     zoom: tile zoom level (higher = more detail). Clamped to the series range.
 
-    Returns WMS GetMap URL, XYZ tile URL (where available), and an NLS viewer
-    deep-link so the location can be opened directly in the browser.
+    Returns WMS GetMap URL, XYZ tile URL (where available), and two NLS viewer
+    deep-links: nls_overlay_url opens the georeferenced overlay viewer;
+    nls_sheet_finder_url opens the Map Finder where you can click a coloured
+    rectangle to open a specific scanned map document.
     """
     if series_id not in NLS_MAP_SERIES:
         valid = ", ".join(NLS_MAP_SERIES.keys())
@@ -393,9 +399,20 @@ def get_nls_map_url(
             f"&LAYERS={series['wms_layer']}&CRS=EPSG:4326"
             f"&BBOX={bbox}&WIDTH=800&HEIGHT=600&FORMAT=image/png"
         ),
-        "nls_viewer_url": (
+        "nls_overlay_url": (
+            f"https://maps.nls.uk/geo/explore/#zoom={zoom}"
+            f"&lat={latitude}&lon={longitude}&layers={series['nls_viewer_layer']}"
+        ),
+        "nls_sheet_finder_url": (
             f"https://maps.nls.uk/geo/find/#zoom={zoom}"
             f"&lat={latitude}&lon={longitude}&layers={series['nls_viewer_layer']}"
+        ),
+        "nls_url_notes": (
+            "nls_overlay_url opens the georeferenced overlay viewer — the historic map "
+            "is shown semi-transparently over modern satellite imagery. "
+            "nls_sheet_finder_url opens the Map Finder, which shows coloured rectangles "
+            "for each available map sheet covering this location; click a rectangle to "
+            "open that specific scanned document."
         ),
         "zoom": zoom,
         "tile_x": tx,
@@ -417,6 +434,7 @@ def get_nls_map_url(
 # ── Archives Hub — SRU search ──────────────────────────────────────────────────
 
 ARCHIVES_HUB_SRU = "https://archiveshub.jisc.ac.uk/sru/"
+ARCHIVES_HUB_SEARCH = "https://archiveshub.jisc.ac.uk/search/"
 
 
 def _parse_sru_xml(xml_text: str) -> dict:
@@ -472,13 +490,16 @@ async def search_archives_hub(
     scottish_only: if True appends 'AND Scotland' to the query to focus on Scottish records.
     max_results: results to return (1–25).
 
-    Returns matching archive descriptions with title, creator, date range, and
-    holding institution. Records are free to view; contact the repository for originals.
+    Always returns a direct search URL. Also attempts the SRU API — if the API is
+    accessible, parsed records are included; otherwise the URL alone is returned.
+    Records are free to view; contact the repository for originals.
     """
     max_results = min(max(1, max_results), 25)
     cql = f'({query}) AND "Scotland"' if scottish_only else query
 
-    params = {
+    search_url = f"{ARCHIVES_HUB_SEARCH}?query={urllib.parse.quote(query)}"
+
+    sru_params = {
         "operation": "searchRetrieve",
         "version": "1.2",
         "query": cql,
@@ -489,36 +510,41 @@ async def search_archives_hub(
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(ARCHIVES_HUB_SRU, params=params)
+            resp = await client.get(ARCHIVES_HUB_SRU, params=sru_params)
+            if resp.status_code == 403:
+                return {
+                    "search_url": search_url,
+                    "note": "Archives Hub SRU API is currently blocked by Cloudflare bot protection. Use search_url to open the search in your browser.",
+                    "records": [],
+                    "total_results": 0,
+                }
             resp.raise_for_status()
-        return _parse_sru_xml(resp.text)
+        result = _parse_sru_xml(resp.text)
+        result["search_url"] = search_url
+        return result
     except httpx.HTTPError as exc:
-        return {"error": f"Archives Hub request failed: {exc}", "records": [], "total_results": 0}
+        return {
+            "search_url": search_url,
+            "error": f"Archives Hub request failed: {exc}",
+            "records": [],
+            "total_results": 0,
+        }
 
 
 @mcp.tool
-async def get_archives_hub_record(identifier: str) -> dict:
-    """Retrieve a specific Archives Hub finding aid by its identifier.
+def get_archives_hub_record(identifier: str) -> dict:
+    """Return a direct URL to a specific Archives Hub finding aid by its identifier.
 
-    identifier: the identifier string returned in search_archives_hub results
-    (e.g. 'gb234-coll-1234'). Returns the full Dublin Core record.
+    identifier: the identifier string (e.g. 'gb234-coll-1234').
+    Returns a browser URL to view the full record — direct API access is blocked
+    by Cloudflare so the record must be viewed in a browser.
     """
-    params = {
-        "operation": "searchRetrieve",
-        "version": "1.2",
-        "query": f'rec.identifier="{identifier}"',
-        "maximumRecords": "1",
-        "startRecord": "1",
-        "recordSchema": "dc",
+    record_url = f"{ARCHIVES_HUB_SEARCH}archives/{identifier}"
+    return {
+        "identifier": identifier,
+        "record_url": record_url,
+        "note": "Open record_url in a browser to view the full finding aid.",
     }
-
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(ARCHIVES_HUB_SRU, params=params)
-            resp.raise_for_status()
-        return _parse_sru_xml(resp.text)
-    except httpx.HTTPError as exc:
-        return {"error": f"Archives Hub request failed: {exc}", "records": [], "total_results": 0}
 
 
 # ── Resources — static guides ──────────────────────────────────────────────────

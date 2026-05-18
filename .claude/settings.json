@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "PowerShell(python --version)",
+      "PowerShell(uv --version 2>$null)",
+      "PowerShell(pip --version 2>$null)",
+      "Bash(dir \"c:\\\\Users\\\\saman\\\\Projects V2\\\\Scotland-geneology-mcp\" /b)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/ -v)",
+      "mcp__scotland-archives__search_scotlandspeople",
+      "mcp__scotland-archives__get_nls_map_url",
+      "mcp__scotland-archives__search_archives_hub",
+      "WebFetch(domain:www.scotlandspeople.gov.uk)",
+      "Read(//c/Users/saman/AppData/Roaming/Claude/**)",
+      "Read(//c/Users/saman/.claude/**)"
+    ]
+  }
+}

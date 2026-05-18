@@ -122,9 +122,10 @@ def test_get_nls_map_url_valid():
     )
     assert "url" not in result or "error" not in result
     assert "wms_get_map" in result
-    assert "nls_viewer_url" in result
+    assert "nls_overlay_url" in result
+    assert "nls_sheet_finder_url" in result
     assert "xyz_tile_url" in result
-    assert "maps.nls.uk" in result["nls_viewer_url"]
+    assert "maps.nls.uk" in result["nls_overlay_url"]
 
 
 def test_get_nls_map_url_unknown_series():
@@ -188,6 +189,18 @@ async def test_search_archives_hub_success():
     assert result["total_results"] == 1
     assert len(result["records"]) == 1
     assert result["records"][0]["title"] == "Papers of the Mackenzie Family of Seaforth"
+    assert "search_url" in result
+    assert "archiveshub.jisc.ac.uk" in result["search_url"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_archives_hub_cloudflare_blocked():
+    respx.get(ARCHIVES_HUB_SRU).mock(return_value=httpx.Response(403, text="Forbidden"))
+    result = await search_archives_hub(query="anything")
+    assert "search_url" in result
+    assert "archiveshub.jisc.ac.uk" in result["search_url"]
+    assert result["records"] == []
 
 
 @pytest.mark.asyncio
@@ -196,6 +209,7 @@ async def test_search_archives_hub_network_error():
     respx.get(ARCHIVES_HUB_SRU).mock(side_effect=httpx.ConnectError("Connection refused"))
     result = await search_archives_hub(query="anything")
     assert "error" in result
+    assert "search_url" in result
     assert result["records"] == []
 
 
@@ -205,7 +219,6 @@ async def test_search_archives_hub_max_results_capped():
     respx.get(ARCHIVES_HUB_SRU).mock(
         return_value=httpx.Response(200, text=SRU_RESPONSE_XML)
     )
-    # Requesting 999 should be capped to 25 in the query params
     result = await search_archives_hub(query="test", max_results=999)
     call = respx.calls[0]
     assert "maximumRecords=25" in str(call.request.url)
@@ -222,11 +235,8 @@ async def test_search_archives_hub_scottish_filter_appended():
     assert "Scotland" in str(call.request.url)
 
 
-@pytest.mark.asyncio
-@respx.mock
-async def test_get_archives_hub_record():
-    respx.get(ARCHIVES_HUB_SRU).mock(
-        return_value=httpx.Response(200, text=SRU_RESPONSE_XML)
-    )
-    result = await get_archives_hub_record("gb234-seaforth-001")
-    assert "records" in result
+def test_get_archives_hub_record():
+    result = get_archives_hub_record("gb234-seaforth-001")
+    assert "record_url" in result
+    assert "gb234-seaforth-001" in result["record_url"]
+    assert "archiveshub.jisc.ac.uk" in result["record_url"]
